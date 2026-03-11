@@ -1,0 +1,6 @@
+{
+  "name": "chain-state",
+  "version": "0.1.0",
+  "description": "Periodically downloads the most recent chain state.",
+  "main": "main.js"
+}
