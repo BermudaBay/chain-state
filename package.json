@@ -2,5 +2,9 @@
   "name": "chain-state",
   "version": "0.1.0",
   "description": "Periodically downloads the most recent chain state.",
-  "main": "main.js"
+  "main": "main.js",
+  "dependencies": {
+    "@bermuda/sdk": "git+ssh://git@github.com:BermudaBay/sdk.git",
+    "ethers": "^6.16.0"
+  }
 }
