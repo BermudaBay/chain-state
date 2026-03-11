@@ -40,6 +40,7 @@ async function main() {
     for (const address of poolAddresses) {
       const contract = new Contract(address, sdk.POOL_ABI, provider);
       const addressDirPath = path.join(chainDirPath, address);
+      const gitKeepFilePath = path.join(addressDirPath, ".gitkeep");
 
       // -------------------------
       // --- Commitment Events ---
@@ -88,6 +89,13 @@ async function main() {
 
       await mkdir(addressDirPath, { recursive: true });
       await writeFile(filePath, output, "utf-8");
+
+      // Ensure .gitkeep file is present.
+      // Such .gitkeep files are used to add new, empty directories via regular
+      // commits from a local machine so that CI can pick them up and add
+      // artifacts to them as only CI should create artifacts to ensure
+      // consistency.
+      await writeFile(gitKeepFilePath, "", "utf-8");
     }
   }
 }
