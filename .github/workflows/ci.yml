@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  schedule:
+    - cron: 0 * * * *
+  workflow_dispatch:
+
+permissions:
+  contents: write
+jobs:
+  crawler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Crawl Blockchains and update artifacts
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - run: |
+          git config --global url."https://${{ secrets.GLOBAL_CHECKOUT_TOKEN }}@github.com/".insteadOf ssh://git@github.com/
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          bun install --frozen-lockfile
+          bun run main.js
+          git add .
+          git commit -m "chore: update artifacts" || echo "No changes to commit..."
+      - name: Push updates to GitHub
+        uses: ad-m/github-push-action@v1.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
