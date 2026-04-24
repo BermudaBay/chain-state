@@ -4,7 +4,7 @@ import bermuda from "@bermuda/sdk";
 import { mergeCommitmentEvents, queryFilterBatched } from "./utils";
 import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
 
-const chains = ["base-sepolia"];
+const chains = ["base-sepolia", "plasma-testnet", "linea-sepolia"];
 
 async function main() {
   // Iterate over all the listed chains.
