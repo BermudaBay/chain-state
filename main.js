@@ -1,8 +1,12 @@
 import path from "path";
 import { Contract } from "ethers";
 import bermuda from "@bermuda/sdk";
-import { mergeCommitmentEvents, queryFilterBatched } from "./utils";
 import { mkdir, readFile, writeFile, readdir } from "node:fs/promises";
+import {
+  queryFilterBatched,
+  mergeCommitmentEvents,
+  RetryingJsonRpcProvider,
+} from "./utils";
 
 const chains = ["base-sepolia", "plasma-testnet", "linea-sepolia"];
 
@@ -12,7 +16,10 @@ async function main() {
     chains.map(async (chain) => {
       const sdk = bermuda(chain);
 
-      const { pool, chainId, startBlock, provider } = sdk.config;
+      const { pool, chainId, startBlock } = sdk.config;
+
+      const { url } = sdk.config.provider._getConnection();
+      const provider = new RetryingJsonRpcProvider(url);
 
       const currentPoolAddress = await pool.getAddress();
       const toBlock = BigInt(await provider.getBlockNumber());
