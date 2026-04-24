@@ -44,7 +44,9 @@ export class RetryingJsonRpcProvider extends JsonRpcProvider {
 
       const jitteredDelay = delay + jitter;
 
-      console.log(`Hitting rate limits... Backing off for ${jitteredDelay}ms`);
+      console.log(
+        `Hitting rate limits when querying ${url}... Backing off for ${jitteredDelay}ms`,
+      );
 
       await sleep(jitteredDelay);
 
