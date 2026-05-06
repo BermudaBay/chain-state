@@ -16,13 +16,19 @@ export class RetryingJsonRpcProvider extends JsonRpcProvider {
     super(url, network, rest);
 
     this.url = url;
+    this.attempt = 0;
+    this.nextAllowedTime = 0;
     this.maxRetries = maxRetries;
     this.baseDelayMs = baseDelayMs;
     this.maxDelayMs = maxDelayMs;
   }
 
   async _send(payload) {
-    let attempt = 0;
+    // Respect any backoff window left over from a previous call.
+    const wait = this.nextAllowedTime - Date.now();
+    if (wait > 0) {
+      await sleep(wait);
+    }
 
     while (true) {
       const results = await super._send(payload);
@@ -34,24 +40,33 @@ export class RetryingJsonRpcProvider extends JsonRpcProvider {
         (r) => r && r.error && r.error.code === RATE_LIMIT_CODE,
       );
 
-      if (!rateLimited || attempt >= this.maxRetries) {
+      if (!rateLimited) {
+        this.attempt = 0;
+        return results;
+      }
+
+      if (this.attempt >= this.maxRetries) {
+        this.attempt = 0;
         return results;
       }
 
       // Exponential backoff with jitter: 250ms, 500ms, 1s, 2s, 4s, capped at 8s.
-      const delay = Math.min(this.baseDelayMs * 2 ** attempt, this.maxDelayMs);
+      const delay = Math.min(
+        this.baseDelayMs * 2 ** this.attempt,
+        this.maxDelayMs,
+      );
 
       const jitter = Math.random() * delay * 0.25;
-
       const jitteredDelay = delay + jitter;
 
       console.log(
         `Hitting rate limits when querying ${this.url}... Backing off for ${jitteredDelay}ms`,
       );
 
+      this.nextAllowedTime = Date.now() + jitteredDelay;
       await sleep(jitteredDelay);
 
-      attempt++;
+      this.attempt++;
     }
   }
 }
