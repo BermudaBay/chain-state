@@ -8,7 +8,7 @@ import {
   RetryingJsonRpcProvider,
 } from "./utils";
 
-const chains = ["base-sepolia", "plasma-testnet", "linea-sepolia"];
+const chains = ["base-sepolia", "linea-sepolia", "plasma-testnet", "gnosis"];
 
 async function main() {
   // Process the listed chains in parallel.
