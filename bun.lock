@@ -5,7 +5,7 @@
     "": {
       "name": "chain-state",
       "dependencies": {
-        "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#v0.1.5",
+        "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#v0.1.6",
         "ethers": "^6.16.0",
       },
     },
@@ -17,7 +17,7 @@
 
     "@babel/runtime": ["@babel/runtime@7.29.2", "", {}, "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g=="],
 
-    "@bermuda/sdk": ["@bermuda/sdk@git+ssh://git@github.com/BermudaBay/sdk.git#57de21de5edca1a4e8009041988592be1458fa48", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260424", "@noble/curves": "1.9.0", "@noble/hashes": "2.0.1", "@noir-lang/noir_js": "1.0.0-beta.20", "@passkeys/core": "4.1.0", "@stablelib/x25519": "2.0.1", "@stablelib/xchacha20poly1305": "2.0.1", "@x402/core": "2.5.0", "@x402/evm": "2.5.0", "@x402/fetch": "2.5.0", "@zkpassport/poseidon2": "0.6.2", "ethers": "6.14.4", "viem": "2.46.3" } }, "57de21de5edca1a4e8009041988592be1458fa48"],
+    "@bermuda/sdk": ["@bermuda/sdk@git+ssh://git@github.com/BermudaBay/sdk.git#698fa6dbff38942dabe40769c6647237e5df23a4", { "dependencies": { "@aztec/bb.js": "5.0.0-nightly.20260424", "@noble/curves": "1.9.0", "@noble/hashes": "2.0.1", "@noir-lang/noir_js": "1.0.0-beta.20", "@passkeys/core": "4.1.0", "@stablelib/x25519": "2.0.1", "@stablelib/xchacha20poly1305": "2.0.1", "@x402/core": "2.5.0", "@x402/evm": "2.5.0", "@x402/fetch": "2.5.0", "@zkpassport/poseidon2": "0.6.2", "ethers": "6.14.4", "viem": "2.46.3" } }, "698fa6dbff38942dabe40769c6647237e5df23a4"],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw=="],
 
