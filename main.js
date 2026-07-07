@@ -8,7 +8,13 @@ import {
   RetryingJsonRpcProvider,
 } from "./utils";
 
-const chains = ["base-sepolia", "linea-sepolia", "plasma-testnet", "gnosis"];
+export const chains = [
+  "base-sepolia",
+  "linea-sepolia",
+  "plasma-testnet",
+  "gnosis",
+  "robinhood-testnet",
+];
 
 async function main() {
   // Process the listed chains in parallel.
@@ -109,4 +115,6 @@ async function main() {
   );
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
