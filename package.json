@@ -7,7 +7,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#v0.1.7-arc0",
+    "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#v0.1.7",
     "ethers": "^6.16.0"
   }
 }
