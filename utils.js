@@ -118,6 +118,19 @@ const ALCHEMY_SUBDOMAIN = {
 // Keyless public fallbacks, health-ranked (mirrors mobile-agent/worklet/chains.mjs;
 // gnosis from chainlist). Order matters — tried after the keyed endpoint.
 const PUBLIC_RPCS = {
+  // ── 8453 here is NOT Base mainnet ────────────────────────────────────────
+  // It is an anvil FORK of Base that reports Base's own chain id (it has to — a
+  // hosted Uniswap or Morpho frontend refuses to talk to a wallet reporting
+  // 31337), with a Bermuda pool restored onto it from a snapshot. That pool has
+  // code on this endpoint and NOWHERE ELSE.
+  //
+  // 🔴 So this list has exactly one entry, and adding a "fallback" would be a
+  // bug, not a robustness improvement: pointing the crawler at real Base — or at
+  // a keyed Alchemy Base endpoint via ALCHEMY_SUBDOMAIN below — indexes a chain
+  // where the pool address holds no code, and writes a confidently EMPTY
+  // artifact over a good one. For every other chain here the keyed endpoint is
+  // preferred; for this one it is wrong.
+  8453: ["https://api.tilapialabs.xyz/bermuda-boat/rpc"],
   84532: [
     "https://sepolia.base.org",
     "https://base-sepolia-rpc.publicnode.com",
