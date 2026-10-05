@@ -550,6 +550,20 @@ describe("a refusal moves on, an answer does not", () => {
     });
   });
 
+  test("should ask a lone node that failed again on the next read", async () => {
+    let calls = 0;
+    const net = network({
+      "own.test": () => (calls++ < 2 ? { throws: true } : { result: "0x5" }),
+    });
+    const { p } = pool([m("own.test")], net, { ordered: true });
+    const failed = (await p.serve(balanceAt(28, "latest"))) as any;
+    const answer = (await p.serve(balanceAt(29, "latest"))) as any;
+    expect({ failed: !!failed.error, result: answer.result }).toEqual({
+      failed: true,
+      result: "0x5",
+    });
+  });
+
   test("should not ask a cooling node when the ready ones refuse", async () => {
     let bDown = false;
     const net = network({
