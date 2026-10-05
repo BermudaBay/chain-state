@@ -201,6 +201,25 @@ interface LogFilter {
 
 const hex = (n: number) => `0x${n.toString(16)}`;
 
+/** The block a request names: a log filter's `toBlock`, or the method's block tag. */
+function blockOf(method: string, params: unknown[]): number | null {
+  if (method === "eth_getLogs")
+    return blockNumberOf(((params[0] ?? {}) as LogFilter).toBlock ?? null);
+  return BLOCK_PARAM[method] !== undefined
+    ? blockNumberOf(params[BLOCK_PARAM[method]])
+    : null;
+}
+
+/** `Retry-After` as ms from now: delta seconds or an HTTP date. 0 when absent. */
+function retryAfterOf(headers: Headers | undefined, now: number): number {
+  const value = headers?.get?.("retry-after");
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - now) : 0;
+}
+
 // ── the read cache ────────────────────────────────────────────────────────────
 
 /** About one block on Base. */
@@ -337,6 +356,12 @@ const SPLIT_CONCURRENCY = 3;
 /** The most windows one split may become. Past it the range refusal goes back to the caller. */
 const MAX_SPLIT_WINDOWS = 24;
 const COOLDOWN_MS = [1_000, 3_000, 10_000, 30_000];
+/**
+ * The longest a request waits for a member to leave its cooldown when every member that serves it
+ * is cooling. A longer cooldown (a `Retry-After` of a minute) refuses the request at once, without a
+ * request to any node.
+ */
+const COOLDOWN_WAIT_MS = 2_000;
 /** How long "this node is behind that block" is believed. */
 const BEHIND_MS = 3_000;
 
@@ -648,8 +673,9 @@ export class RpcPool {
   }
 
   /**
-   * One bounded wait when nobody is left to ask: a walk that ends on a rate limit with every
-   * member cooling waits for the first cooldown to end, at most 2 s, and walks once more.
+   * One bounded wait when nobody is left to ask: a walk that ends refused with every member that
+   * serves the request cooling waits for the first cooldown to end, if that is at most
+   * {@link COOLDOWN_WAIT_MS} away, and walks once more.
    */
   private async waitOutEveryoneCooling(
     method: string,
@@ -659,13 +685,27 @@ export class RpcPool {
     answer: Json,
   ): Promise<Json> {
     if (!("error" in answer) || signal?.aborted) return answer;
-    const kind = classify(200, answer).kind;
-    if (kind !== "rate-limited" && kind !== "down") return answer;
-    const t = this.now();
-    if (this.members.some((m) => m.cooldownUntil <= t)) return answer;
-    const soonest = Math.min(...this.members.map((m) => m.cooldownUntil)) - t;
-    await this.sleep(Math.max(0, Math.min(2_000, soonest)));
+    const wait = this.readyAt(method, params, span) - this.now();
+    if (wait <= 0 || wait > COOLDOWN_WAIT_MS) return answer;
+    await this.sleep(wait);
     return this.walk(method, params, signal, span);
+  }
+
+  /**
+   * When the first member that serves this request leaves its cooldown; 0 when one is ready now or
+   * none serves it.
+   */
+  private readyAt(
+    method: string,
+    params: unknown[],
+    span: number | null,
+  ): number {
+    const t = this.now();
+    const ends = this.candidates(method, params, span).map(
+      (m) => m.cooldownUntil,
+    );
+    if (ends.length === 0 || ends.some((end) => end <= t)) return 0;
+    return Math.min(...ends);
   }
 
   /** Ask members in routing order, each at most once, until one answers. */
@@ -676,16 +716,33 @@ export class RpcPool {
     span: number | null,
   ): Promise<Json> {
     const order = this.order(method, params, span);
+    if (order.length === 0) {
+      const at = this.readyAt(method, params, span);
+      if (at > 0) {
+        const seconds = Math.max(1, Math.ceil((at - this.now()) / 1_000));
+        return {
+          error: {
+            code: -32005,
+            message: `no RPC node is ready: every node that serves this request is cooling down after a refusal, the first for ${seconds} s more`,
+          },
+        };
+      }
+    }
     let last: Json | null = null;
     for (const member of order) {
       if (signal?.aborted) break;
-      const { status, body } = await this.ask(member, method, params, signal);
+      const { status, body, retryAfterMs } = await this.ask(
+        member,
+        method,
+        params,
+        signal,
+      );
       const verdict = classify(status, body);
       if (verdict.kind === "answer") {
         this.succeeded(member);
         return strip(body as Json);
       }
-      this.learn(member, method, params, verdict);
+      this.learn(member, method, params, verdict, retryAfterMs);
       last =
         body && typeof body === "object" && "error" in (body as Json)
           ? strip(body as Json)
@@ -711,7 +768,7 @@ export class RpcPool {
     method: string,
     params: unknown[],
     signal?: AbortSignal,
-  ): Promise<{ status: number; body: unknown }> {
+  ): Promise<{ status: number; body: unknown; retryAfterMs: number }> {
     while (member.inFlight >= member.limit) await this.sleep(25);
     member.inFlight += 1;
     const timeout = withTimeout(
@@ -732,10 +789,14 @@ export class RpcPool {
       } catch {
         body = undefined;
       }
-      return { status: res.status, body };
+      return {
+        status: res.status,
+        body,
+        retryAfterMs: retryAfterOf(res.headers, this.now()),
+      };
     } catch {
       // A transport error's message can carry the URL; it is never passed on.
-      return { status: 0, body: undefined };
+      return { status: 0, body: undefined, retryAfterMs: 0 };
     } finally {
       member.inFlight -= 1;
     }
@@ -759,13 +820,15 @@ export class RpcPool {
     method: string,
     params: unknown[],
     verdict: Verdict,
+    retryAfterMs = 0,
   ): void {
     const t = this.now();
     switch (verdict.kind) {
       case "rate-limited":
       case "down": {
-        member.cooldownUntil =
-          t + COOLDOWN_MS[Math.min(member.strikes, COOLDOWN_MS.length - 1)];
+        const backoff =
+          COOLDOWN_MS[Math.min(member.strikes, COOLDOWN_MS.length - 1)];
+        member.cooldownUntil = t + Math.max(backoff, retryAfterMs);
         member.strikes += 1;
         if (verdict.kind === "rate-limited") {
           member.limit = Math.max(1, Math.floor(member.limit / 2));
@@ -812,8 +875,9 @@ export class RpcPool {
   }
 
   /**
-   * Who to ask, in order. Members that cannot serve the request are left out; members that are
-   * cooling down or believed behind go to the back rather than out.
+   * Who to ask, in order. Members that cannot serve the request or are cooling down are left out;
+   * members believed behind go to the back rather than out. Empty when every member that serves the
+   * request is cooling: a rate limit is honoured, not walked through.
    */
   private order(
     method: string,
@@ -823,11 +887,31 @@ export class RpcPool {
     const t = this.now();
     const filter =
       method === "eth_getLogs" ? ((params[0] ?? {}) as LogFilter) : null;
-    const block = filter
-      ? blockNumberOf(filter.toBlock ?? null)
-      : BLOCK_PARAM[method] !== undefined
-        ? blockNumberOf(params[BLOCK_PARAM[method]])
-        : null;
+    const pool = this.candidates(method, params, span);
+    const ranked = this.ordered
+      ? pool
+      : this.aboutNow(method, filter, blockOf(method, params))
+        ? this.primaryFirst(pool)
+        : this.rotated(pool);
+    const awake = ranked.filter((m) => m.cooldownUntil <= t);
+    const behind = awake
+      .filter((m) => m.behindUntil > t)
+      .sort((a, b) => a.behindUntil - b.behindUntil);
+    return [...awake.filter((m) => m.behindUntil <= t), ...behind];
+  }
+
+  /**
+   * The members that can serve the request, cooling or not. When none can, everyone who serves the
+   * method, so the last refusal is honest.
+   */
+  private candidates(
+    method: string,
+    params: unknown[],
+    span: number | null,
+  ): Member[] {
+    const filter =
+      method === "eth_getLogs" ? ((params[0] ?? {}) as LogFilter) : null;
+    const block = blockOf(method, params);
     const lowest = filter ? blockNumberOf(filter.fromBlock ?? null) : block;
     const addressed = filter
       ? filter.address !== undefined && filter.address !== null
@@ -856,25 +940,7 @@ export class RpcPool {
       if (lowest !== null && lowest < m.prunedBelow) return false;
       return true;
     });
-    // Nobody can: hand the walk everyone who serves the method, so the last refusal is honest.
-    const pool = able.length > 0 ? able : this.members.filter(serves);
-
-    const ranked = this.ordered
-      ? pool
-      : this.aboutNow(method, filter, block)
-        ? this.primaryFirst(pool)
-        : this.rotated(pool);
-    const ready = ranked.filter(
-      (m) => m.cooldownUntil <= t && m.behindUntil <= t,
-    );
-    const later = ranked
-      .filter((m) => !(m.cooldownUntil <= t && m.behindUntil <= t))
-      .sort(
-        (a, b) =>
-          Math.max(a.cooldownUntil, a.behindUntil) -
-          Math.max(b.cooldownUntil, b.behindUntil),
-      );
-    return [...ready, ...later];
+    return able.length > 0 ? able : this.members.filter(serves);
   }
 
   /** Is this a read about NOW? A pinned read at the tip counts too. */

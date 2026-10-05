@@ -64,8 +64,10 @@ never throttle or ban the service's address:
 - one node per request, no fan-out; a request moves to the next node only when a node declines
   (rate limit, down, range too wide, block not there yet), never on a real answer such as a revert;
 - reads about now go to one node, reads about the past rotate across the nodes by weight;
-- HTTP 429 and `-32005` (and the other quota codes) cool the node with a growing backoff and halve
-  the requests it may have in flight;
+- HTTP 429 and `-32005` (and the other quota codes) cool the node with a growing backoff, or for
+  as long as its `Retry-After` says, and halve the requests it may have in flight; a cooling node is
+  asked nothing until its cooldown ends, and when every node is cooling a read waits up to 2 s for
+  the first, else fails at once without a request (the next tick tries again);
 - `eth_getLogs` goes only to nodes that serve logs at that width, and each window is sized to the
   widest node, so no node is asked a range it refuses;
 - every request carries a `User-Agent` (some free nodes answer 403 without one).
