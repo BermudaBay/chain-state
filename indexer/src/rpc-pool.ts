@@ -307,7 +307,10 @@ interface Member {
   unsupported: Set<string>;
   prunedBelow: number;
   behindUntil: number;
+  /** Until when it goes to the back of the order, after a refusal about time. */
   cooldownUntil: number;
+  /** Until when it is asked nothing at all: it said "not now" (a rate limit, a `Retry-After`). */
+  limitedUntil: number;
   strikes: number;
   inFlight: number;
   /** How many requests it may have in flight now: halved by a rate limit, regrown by answers. */
@@ -425,6 +428,7 @@ export class RpcPool {
       prunedBelow: 0,
       behindUntil: 0,
       cooldownUntil: 0,
+      limitedUntil: 0,
       strikes: 0,
       inFlight: 0,
       limit: MAX_IN_FLIGHT,
@@ -723,7 +727,7 @@ export class RpcPool {
         return {
           error: {
             code: -32005,
-            message: `no RPC node is ready: every node that serves this request is cooling down after a refusal, the first for ${seconds} s more`,
+            message: `no RPC node is ready: every node that serves this request is rate-limited, the first for ${seconds} s more`,
           },
         };
       }
@@ -829,6 +833,10 @@ export class RpcPool {
         const backoff =
           COOLDOWN_MS[Math.min(member.strikes, COOLDOWN_MS.length - 1)];
         member.cooldownUntil = t + Math.max(backoff, retryAfterMs);
+        // A node that said "not now" is left alone until then. One that failed (a network error,
+        // a 5xx) only goes to the back, so a lone node is asked again as soon as it is back.
+        if (verdict.kind === "rate-limited" || retryAfterMs > 0)
+          member.limitedUntil = member.cooldownUntil;
         member.strikes += 1;
         if (verdict.kind === "rate-limited") {
           member.limit = Math.max(1, Math.floor(member.limit / 2));
@@ -875,9 +883,10 @@ export class RpcPool {
   }
 
   /**
-   * Who to ask, in order. Members that cannot serve the request or are cooling down are left out;
-   * members believed behind go to the back rather than out. Empty when every member that serves the
-   * request is cooling: a rate limit is honoured, not walked through.
+   * Who to ask, in order. Members that cannot serve the request, and members that said "not now"
+   * (a rate limit, a `Retry-After`) until then, are left out; members cooling down after a failure
+   * or believed behind go to the back rather than out. Empty when every member that serves the
+   * request is rate-limited: a rate limit is honoured, not walked through.
    */
   private order(
     method: string,
@@ -893,11 +902,18 @@ export class RpcPool {
       : this.aboutNow(method, filter, blockOf(method, params))
         ? this.primaryFirst(pool)
         : this.rotated(pool);
-    const awake = ranked.filter((m) => m.cooldownUntil <= t);
-    const behind = awake
-      .filter((m) => m.behindUntil > t)
-      .sort((a, b) => a.behindUntil - b.behindUntil);
-    return [...awake.filter((m) => m.behindUntil <= t), ...behind];
+    const askable = ranked.filter((m) => m.limitedUntil <= t);
+    const ready = askable.filter(
+      (m) => m.cooldownUntil <= t && m.behindUntil <= t,
+    );
+    const later = askable
+      .filter((m) => !ready.includes(m))
+      .sort(
+        (a, b) =>
+          Math.max(a.cooldownUntil, a.behindUntil) -
+          Math.max(b.cooldownUntil, b.behindUntil),
+      );
+    return [...ready, ...later];
   }
 
   /**
