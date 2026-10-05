@@ -80,7 +80,8 @@ three requests a minute.
 of a secret file holding that list, `#` starting a comment) **replaces** the free nodes; the URLs
 are then asked in order, with the same refusal handling. A keyed URL may only come from
 `RPC_URLS_FILE`; `RPC_URLS` refuses one. No URL is ever logged or returned. The retired names
-`RPC`, `RPC_POOL`, `RPC_URLS_<CHAIN>`, `BASE_RPC` and `RPC_UPSTREAM` are ignored with a warning.
+`RPC`, `RPC_POOL`, `FALLBACK_RPCS`, `BASE_RPC`, `RPC_UPSTREAM` and `RPC_URLS_<CHAIN>` are ignored
+with a warning at start, as in every service.
 
 The pool in `src/rpc-pool.ts` is a copy of the sdk's free-node pool (same routing rules, same
 `createRpcPool` options); it is replaced by the sdk's once that release is pinned here.

@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { loadConfig } from "./config";
 import { Follower } from "./follower";
 import { createRpcPool } from "./rpc-pool";
-import { legacyRpcEnv } from "./rpc-urls";
+import { retiredRpcWarning } from "./rpc-urls";
 import { createApp } from "./server";
 import { Store } from "./store";
 
@@ -28,11 +28,8 @@ export async function startIndexer(
   log: (line: string) => void = (line) => console.log(`[indexer] ${line}`),
 ): Promise<{ url: string; stop(): Promise<void> }> {
   const config = loadConfig(env);
-  for (const name of legacyRpcEnv(env)) {
-    log(
-      `${name} is retired and ignored; set RPC_URLS or RPC_URLS_FILE instead`,
-    );
-  }
+  const retired = retiredRpcWarning(env);
+  if (retired) log(retired);
   mkdirSync(dirname(config.dbPath), { recursive: true });
   const store = Store.open(config.dbPath, {
     chainId: String(config.chainId),

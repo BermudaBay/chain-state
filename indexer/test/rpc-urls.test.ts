@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { rpcChainOf } from "../src/rpc-nodes";
 import {
   isKeyedRpcUrl,
-  legacyRpcEnv,
+  retiredRpcVariables,
+  retiredRpcWarning,
   readRpcUrls,
   redactRpcUrls,
 } from "../src/rpc-urls";
@@ -84,25 +85,37 @@ describe("keyed URLs", () => {
   });
 });
 
-describe("legacyRpcEnv", () => {
+describe("the retired names", () => {
   test("should name every retired RPC variable that is set", () => {
     expect(
-      legacyRpcEnv({
+      retiredRpcVariables({
         RPC: "x",
         RPC_POOL: "x",
+        FALLBACK_RPCS: "x",
         BASE_RPC: "x",
         RPC_UPSTREAM: "x",
         RPC_URLS_BASE_SEPOLIA: "x",
         RPC_URLS: "x",
         RPC_URLS_FILE: "x",
-      }).sort(),
+      }),
     ).toEqual([
-      "BASE_RPC",
       "RPC",
       "RPC_POOL",
+      "FALLBACK_RPCS",
+      "BASE_RPC",
       "RPC_UPSTREAM",
       "RPC_URLS_BASE_SEPOLIA",
     ]);
+  });
+
+  test("should warn by name, as every service words it, never by value", () => {
+    expect(retiredRpcWarning({ RPC: KEYED })).toBe(
+      "RPC is retired and ignored: set RPC_URLS, or RPC_URLS_FILE for a keyed URL, to replace the free RPC nodes",
+    );
+  });
+
+  test("should not warn when none is set", () => {
+    expect(retiredRpcWarning({ RPC_URLS: "http://a.test" })).toBeUndefined();
   });
 });
 
