@@ -19,6 +19,7 @@ type Reply = {
   error?: { code: number; message: string; data?: string };
   raw?: string;
   throws?: boolean;
+  headers?: Record<string, string>;
 };
 type Handler = (call: Call) => Reply;
 
@@ -56,7 +57,10 @@ function network(handlers: Record<string, Handler>) {
           ? { error: reply.error }
           : { result: reply.result ?? null }),
       });
-    return new Response(text, { status: reply.status ?? 200 });
+    return new Response(text, {
+      status: reply.status ?? 200,
+      headers: reply.headers,
+    });
   }) as typeof fetch;
   return { fetchImpl, log, hosts: () => log.map((l) => l.host) };
 }
@@ -106,6 +110,14 @@ const rateLimited: Handler = () => ({
   status: 429,
   error: { code: -32005, message: "rate limit exceeded" },
 });
+/** A rate limit that names how long to stay away. */
+const retryAfter60: Handler = () => ({
+  status: 429,
+  error: { code: -32005, message: "rate limit exceeded" },
+  headers: { "retry-after": "60" },
+});
+const balanceAt = (i: number, block: string) =>
+  rpc("eth_getBalance", [`0x${String(i).padStart(40, "0")}`, block], i);
 
 describe("classify", () => {
   const cases: Array<[string, number, unknown, string]> = [
@@ -488,6 +500,71 @@ describe("a refusal moves on, an answer does not", () => {
     expect(stubborn.log.length).toBe(2);
   });
 
+  test("should send no request to a node inside its Retry-After", async () => {
+    const hosts = ["a.test", "b.test", "c.test", "d.test", "e.test"];
+    const net = network(
+      Object.fromEntries(hosts.map((h) => [h, retryAfter60])),
+    );
+    const { p, advance } = pool(
+      hosts.map((h) => m(h)),
+      net,
+    );
+    await p.serve(balanceAt(20, "0x10"));
+    const first = net.log.length;
+    for (let i = 0; i < 20; i += 1) {
+      advance(1_000);
+      await p.serve(balanceAt(21 + i, hex(0x11 + i)));
+    }
+    expect({ first, later: net.log.length - first }).toEqual({
+      first: 5,
+      later: 0,
+    });
+  });
+
+  test("should refuse at once, without a request, while every node cools", async () => {
+    const net = network({ "own.test": retryAfter60 });
+    const { p, advance, slept } = pool([m("own.test")], net, { ordered: true });
+    await p.serve(balanceAt(22, "latest"));
+    advance(1_000);
+    const refused = (await p.serve(balanceAt(23, "latest"))) as any;
+    expect({
+      code: refused.error.code,
+      asked: net.log.length,
+      slept,
+    }).toEqual({ code: -32005, asked: 1, slept: [] });
+  });
+
+  test("should ask a node again once its Retry-After has passed", async () => {
+    let limited = true;
+    const net = network({
+      "own.test": (c) => (limited ? retryAfter60(c) : { result: "0x9" }),
+    });
+    const { p, advance } = pool([m("own.test")], net, { ordered: true });
+    await p.serve(balanceAt(24, "latest"));
+    limited = false;
+    advance(60_000);
+    const answer = (await p.serve(balanceAt(25, "latest"))) as any;
+    expect({ result: answer.result, asked: net.log.length }).toEqual({
+      result: "0x9",
+      asked: 2,
+    });
+  });
+
+  test("should not ask a cooling node when the ready ones refuse", async () => {
+    let bDown = false;
+    const net = network({
+      "a.test": retryAfter60,
+      "b.test": () =>
+        bDown ? { status: 503, raw: "down" } : { result: "0x1" },
+    });
+    const { p, advance } = pool([m("a.test", { weight: 5 }), m("b.test")], net);
+    await p.serve(balanceAt(26, "0x10"));
+    bDown = true;
+    advance(1_000);
+    await p.serve(balanceAt(27, "0x11"));
+    expect(net.hosts().filter((h) => h === "a.test").length).toBe(1);
+  });
+
   test("should walk past a rate limit and cool the node that gave it", async () => {
     const net = network({ "a.test": rateLimited, "b.test": ok("0x1") });
     const { p } = pool([m("a.test", { weight: 5 }), m("b.test")], net);
@@ -692,7 +769,6 @@ describe("logs go where they are served", () => {
   });
 
   test("should fail the whole read when one window fails", async () => {
-    let n = 0;
     const net = network({
       "b.test": (call) => {
         const f = call.params[0];
@@ -705,7 +781,8 @@ describe("logs go where they are served", () => {
               message: "exceed maximum block range: 50000",
             },
           };
-        return n++ === 1
+        // The second window fails every time it is asked, its retry after the cooldown included.
+        return Number.parseInt(f.fromBlock, 16) === 50_001
           ? { status: 503, raw: "down" }
           : { result: [{ blockNumber: f.fromBlock }] };
       },
