@@ -4,7 +4,7 @@
   "description": "Periodically downloads the most recent chain state.",
   "main": "main.js",
   "scripts": {
-    "test": "bun test"
+    "test": "bun test ./main.test.js"
   },
   "dependencies": {
     "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#v0.2.0-bs",
