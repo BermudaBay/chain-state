@@ -1,0 +1,5 @@
+# The database is a rebuildable cache.
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
