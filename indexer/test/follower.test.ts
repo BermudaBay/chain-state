@@ -276,6 +276,32 @@ describe("verification", () => {
     ]);
   });
 
+  test("should wait for a node whose head is below the indexed block, not rebuild", async () => {
+    const first = setup();
+    deploy(first.chain);
+    first.chain.mine(3);
+    await first.follower.tick();
+    const generation = first.store.meta.generation;
+    const confirmed = first.store.meta.confirmed;
+    first.store.close();
+    // A restart, whose pool has not seen a head yet, reading from a node 13 blocks behind.
+    const { chain, store, follower } = setup({
+      chain: first.chain,
+      path: first.path,
+      node: { behind: 13 },
+    });
+    chain.mine(10);
+    for (let i = 0; i < 4; i += 1) await follower.tick();
+    const waited = [store.meta.generation === generation, store.meta.confirmed];
+    chain.behave("a.test", { behind: 0 });
+    await follower.tick();
+    expect([...waited, store.meta.confirmed]).toEqual([
+      true,
+      confirmed,
+      chain.head,
+    ]);
+  });
+
   test("should absorb a reorg shallower than the confirmation depth", async () => {
     const { chain, store, follower } = setup({ confirmations: 3 });
     deploy(chain);

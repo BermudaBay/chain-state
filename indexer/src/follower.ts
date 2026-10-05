@@ -50,7 +50,9 @@ class InconsistentRows extends Error {}
  *
  * A mismatch rolls the unverified rows back and retries on the next tick; three in a row (a reorg
  * deeper than the confirmation depth, or a node serving bad data throughout) wipe the database and
- * rebuild it from the start block under a new generation.
+ * rebuild it from the start block under a new generation. A head below the indexed block is a
+ * node that lags (the pool keeps the head from running backwards only once it has seen one), not a
+ * mismatch: the tick waits for it.
  */
 export class Follower {
   private readonly store: Store;
@@ -66,6 +68,8 @@ export class Follower {
   private sentinelMissing = false;
   private syncedAt: number | null;
   private lastHead: number | null = null;
+  /** Whether the last head read was below the indexed block, so the wait is logged once. */
+  private headBehind = false;
   private ticking: Promise<void> | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** Set by `stop()`: the loop schedules no tick, and a running tick ends after its window. */
@@ -153,13 +157,17 @@ export class Follower {
     try {
       await this.discoverModules();
       const head = await readHead(this.rpc);
-      this.lastHead = head;
       if (this.store.meta.indexed > head) {
-        this.mismatch(
-          `the chain's head ${head} is below indexed block ${this.store.meta.indexed}`,
-        );
+        if (!this.headBehind) {
+          this.log(
+            `the head read, ${head}, is below indexed block ${this.store.meta.indexed}; waiting for the node to catch up`,
+          );
+        }
+        this.headBehind = true;
         return;
       }
+      this.headBehind = false;
+      this.lastHead = head;
       const target = head - this.opts.confirmations;
       if (target > this.store.meta.indexed)
         await this.follow(this.store.meta.indexed + 1, target);

@@ -89,6 +89,8 @@ The pool in `src/rpc-pool.ts` is a copy of the sdk's free-node pool (same routin
 Every tick:
 
 1. Read the head. `target = head - INDEX_CONFIRMATIONS`; nothing to do when `target` is not new.
+   A head below the indexed block is a node that lags (after a restart the pool has not yet seen a
+   higher head to hold it to), so the tick waits for it rather than count a mismatch.
 2. Fetch `[indexed + 1, target]` with one addressed `eth_getLogs` per window: the pool, the
    registry core and its three modules (read once from the core's `modules()`), filtered on the
    sixteen topic0s below. Each window's rows are stored with the indexed watermark in one sqlite
