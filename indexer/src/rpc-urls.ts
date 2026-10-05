@@ -118,16 +118,39 @@ export function readRpcUrls(opts: {
   return urls;
 }
 
-/** The retired RPC variables. A service that still sets one is told it is ignored. */
-const LEGACY = new Set(["RPC", "RPC_POOL", "BASE_RPC", "RPC_UPSTREAM"]);
+/** The RPC variables no service reads any more: `RPC_URLS` and `RPC_URLS_FILE` replace them. */
+const RETIRED_RPC_VARIABLES = [
+  "RPC",
+  "RPC_POOL",
+  "FALLBACK_RPCS",
+  "BASE_RPC",
+  "RPC_UPSTREAM",
+];
 
-export function legacyRpcEnv(
+/**
+ * The retired RPC variables set in `env`, by name, a per-chain `RPC_URLS_<CHAIN>` included. Every
+ * service ignores them and says so once at boot ({@link retiredRpcWarning}).
+ */
+export function retiredRpcVariables(
   env: Record<string, string | undefined>,
 ): string[] {
-  return Object.keys(env).filter(
-    (name) =>
-      env[name] !== undefined &&
-      (LEGACY.has(name) ||
-        (/^RPC_URLS_[A-Z0-9_]+$/.test(name) && name !== "RPC_URLS_FILE")),
+  const set = (name: string) => Boolean(env[name]?.trim());
+  const perChain = Object.keys(env)
+    .filter(
+      (name) => /^RPC_URLS_[A-Z0-9_]+$/.test(name) && name !== "RPC_URLS_FILE",
+    )
+    .sort();
+  return [...RETIRED_RPC_VARIABLES, ...perChain].filter(set);
+}
+
+/** The boot warning for the retired RPC variables set in `env`, by name only; none, undefined. */
+export function retiredRpcWarning(
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const names = retiredRpcVariables(env);
+  if (names.length === 0) return undefined;
+  return (
+    `${names.join(", ")} ${names.length === 1 ? "is" : "are"} retired and ignored: ` +
+    "set RPC_URLS, or RPC_URLS_FILE for a keyed URL, to replace the free RPC nodes"
   );
 }
