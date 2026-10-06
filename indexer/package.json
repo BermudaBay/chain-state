@@ -11,7 +11,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#92e6adc69d630fa883e58abbb7a50f74238c0f89",
+    "@bermuda/sdk": "git+ssh://git@github.com/BermudaBay/sdk.git#33dff59c0f4332e6475dbdeaa5fb7b8deba1d885",
     "ethers": "6.17.0"
   },
   "devDependencies": {
