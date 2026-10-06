@@ -1,4 +1,8 @@
-import bermuda, { readRpcUrls, rpcChainOf } from "@bermuda/sdk";
+import bermuda, {
+  readRpcSharedBy,
+  readRpcUrls,
+  rpcChainOf,
+} from "@bermuda/sdk";
 import { readFileSync } from "node:fs";
 
 /** The sdk presets by chain id. */
@@ -26,6 +30,8 @@ export interface Config {
   port: number;
   /** The operator's `RPC_URLS` / `RPC_URLS_FILE`, replacing the free nodes. Never logged. */
   rpcUrls?: string[];
+  /** `RPC_SHARED_BY`: the processes on this IP that read the same free nodes, this one included. */
+  rpcSharedBy: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -39,6 +45,8 @@ type Env = Record<string, string | undefined>;
  *   START_BLOCK                                  overrides the preset's start block
  *   INDEX_INTERVAL_SECONDS (60), INDEX_CONFIRMATIONS (12), DB_PATH, PORT (4200)
  *   RPC_URLS / RPC_URLS_FILE                     replace the free nodes; never logged
+ *   RPC_SHARED_BY (1)                            the processes on this IP that share the free
+ *                                                nodes' budgets, this one included
  */
 export function loadConfig(
   env: Env,
@@ -72,6 +80,7 @@ export function loadConfig(
   }
 
   const rpcUrls = readRpcUrls({ env, readFile });
+  const rpcSharedBy = readRpcSharedBy({ env });
   if (!rpcUrls && !rpcChainOf(chainId)) {
     throw new Error(
       `no free nodes are known for chain ${chainId}: set RPC_URLS or RPC_URLS_FILE`,
@@ -92,6 +101,7 @@ export function loadConfig(
     dbPath: env.DB_PATH || "data/indexer.sqlite",
     port: integer(env, "PORT", 4200),
     rpcUrls,
+    rpcSharedBy,
   };
 }
 
