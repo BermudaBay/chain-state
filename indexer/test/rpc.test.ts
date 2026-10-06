@@ -76,6 +76,13 @@ describe("the free nodes", () => {
     const rpc = createRpc({ chainId: 84532 });
     expect([rpc.ordered, rpc.describe().length]).toEqual([false, 5]);
   });
+
+  test("should take its share of each node's measured rate when processes share the IP", () => {
+    const rate = (sharedBy: number) =>
+      createRpc({ chainId: 5042002, rpcSharedBy: sharedBy }).describe()[0]!
+        .perSecond.state!;
+    expect(rate(4)).toBe(rate(1) / 4);
+  });
 });
 
 describe("the operator's override", () => {

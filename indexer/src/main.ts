@@ -28,18 +28,20 @@ export function withUserAgent(
 
 /**
  * The sdk's RPC pool every read goes through: the chain's free nodes, or the operator's
- * `RPC_URLS` / `RPC_URLS_FILE` in their place, asked in order. No read cache: the follower never
- * asks the same question twice except to retry a range that failed verification, and that retry
- * must reach a node. In-flight reads are still shared.
+ * `RPC_URLS` / `RPC_URLS_FILE` in their place, asked in order, taking the 1/`rpcSharedBy` share of
+ * every node's budget (default 1). No read cache: the follower never asks the same question twice
+ * except to retry a range that failed verification, and that retry must reach a node. In-flight
+ * reads are still shared.
  */
 export function createRpc(
-  config: Pick<Config, "chainId" | "rpcUrls">,
+  config: Pick<Config, "chainId" | "rpcUrls"> & { rpcSharedBy?: number },
   opts: Pick<CreateRpcPoolOptions, "fetch" | "now" | "sleep"> = {},
 ): RpcPool {
   return createRpcPool({
     ...opts,
     chainId: config.chainId,
     urls: config.rpcUrls,
+    sharedBy: config.rpcSharedBy ?? 1,
     cache: false,
     fetch: withUserAgent(opts.fetch ?? fetch, USER_AGENT),
   });
@@ -95,6 +97,8 @@ export async function startIndexer(
       (config.rpcUrls
         ? `${config.rpcUrls.length} RPC URL(s) from the override`
         : "the free nodes") +
+      ` shared by ${config.rpcSharedBy} ` +
+      `${config.rpcSharedBy === 1 ? "process" : "processes"} on this IP` +
       `; listening on ${server.port}`,
   );
   follower.start();

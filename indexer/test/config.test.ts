@@ -52,6 +52,22 @@ describe("loadConfig", () => {
     expect(config.rpcUrls).toEqual([keyed]);
   });
 
+  test("should share the free nodes with no other process when RPC_SHARED_BY is unset", () => {
+    expect(loadConfig({ CHAIN_ID: "84532" }).rpcSharedBy).toBe(1);
+  });
+
+  test("should read the processes sharing the free nodes from RPC_SHARED_BY", () => {
+    expect(
+      loadConfig({ CHAIN_ID: "84532", RPC_SHARED_BY: "4" }).rpcSharedBy,
+    ).toBe(4);
+  });
+
+  test("should refuse an RPC_SHARED_BY that is not a positive integer", () => {
+    expect(() =>
+      loadConfig({ CHAIN_ID: "84532", RPC_SHARED_BY: "0x4" }),
+    ).toThrow(/RPC_SHARED_BY/);
+  });
+
   test("should take address and start block overrides", () => {
     const config = loadConfig({
       CHAIN_ID: "31337",

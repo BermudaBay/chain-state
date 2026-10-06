@@ -105,4 +105,32 @@ describe("the service", () => {
       lines.join("\n").includes(rpc),
     ]).toEqual([true, ["2", "3"], false]);
   });
+
+  test("should say at boot how many processes share the nodes", async () => {
+    const chain = new FakeChain();
+    chain.deployRegistry();
+    chain.mine();
+    const rpc = serve(chain);
+    const dir = mkdtempSync(join(tmpdir(), "indexer-main-"));
+    cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const lines: string[] = [];
+    const indexer = await startIndexer(
+      {
+        CHAIN_ID: "31337",
+        RPC_URLS: rpc,
+        RPC_SHARED_BY: "3",
+        POOL_ADDRESS: ADDRESSES.pool,
+        ACCOUNT_REGISTRY_ADDRESS: ADDRESSES.registry,
+        MULTICALL_ADDRESS: ADDRESSES.multicall,
+        START_BLOCK: "1",
+        INDEX_CONFIRMATIONS: "0",
+        DB_PATH: join(dir, "db", "indexer.sqlite"),
+        PORT: "0",
+      },
+      (line) => lines.push(line),
+    );
+    cleanups.push(() => indexer.stop());
+
+    expect(lines.join("\n")).toContain("shared by 3 processes on this IP");
+  });
 });

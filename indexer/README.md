@@ -55,6 +55,7 @@ bun run typecheck
 | `DB_PATH` | The sqlite file. Default `data/indexer.sqlite`; `/data/indexer.sqlite` in the image. |
 | `PORT` | Listen port. Default `4200`. |
 | `RPC_URLS`, `RPC_URLS_FILE` | The one RPC override (below). No default. |
+| `RPC_SHARED_BY` | The processes on this IP that read the same free nodes, this one included (below). Default `1`. |
 
 ### RPC
 
@@ -83,6 +84,11 @@ are then asked in order, with the same refusal handling. A keyed URL may only co
 `RPC_URLS_FILE`; `RPC_URLS` refuses one. No URL is ever logged or returned. The retired names
 `RPC`, `RPC_POOL`, `FALLBACK_RPCS`, `BASE_RPC`, `RPC_UPSTREAM` and `RPC_URLS_<CHAIN>` are ignored
 with a warning at start, as in every service.
+
+A free node meters an IP, not a process. `RPC_SHARED_BY` is the number of processes on this IP,
+the indexer included, that read the same free nodes (the services of one chain on one host, say);
+the pool takes that share of every node's measured rate and in-flight limit. Anything but a
+positive integer stops the start; the start-up line prints it.
 
 ## How it follows the chain
 
