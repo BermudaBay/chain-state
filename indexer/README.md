@@ -58,8 +58,9 @@ bun run typecheck
 
 ### RPC
 
-Unset, every read goes through the chain's free nodes. The pool is a polite client, so the nodes
-never throttle or ban the service's address:
+Every read goes through the sdk's RPC pool (`createRpcPool`), the one every service reads through.
+Without `RPC_URLS` or `RPC_URLS_FILE`, it serves the chain's free nodes. It is a polite client, so
+the nodes never throttle or ban the service's address:
 
 - one node per request, no fan-out; a request moves to the next node only when a node declines
   (rate limit, down, range too wide, block not there yet), never on a real answer such as a revert;
@@ -82,9 +83,6 @@ are then asked in order, with the same refusal handling. A keyed URL may only co
 `RPC_URLS_FILE`; `RPC_URLS` refuses one. No URL is ever logged or returned. The retired names
 `RPC`, `RPC_POOL`, `FALLBACK_RPCS`, `BASE_RPC`, `RPC_UPSTREAM` and `RPC_URLS_<CHAIN>` are ignored
 with a warning at start, as in every service.
-
-The pool in `src/rpc-pool.ts` is a copy of the sdk's free-node pool (same routing rules, same
-`createRpcPool` options); it is replaced by the sdk's once that release is pinned here.
 
 ## How it follows the chain
 

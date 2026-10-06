@@ -1,7 +1,13 @@
+import { isRangeTooWide, redactRpcUrls } from "@bermuda/sdk";
 import { addressesOf, decodeLog, type Contracts, type Row } from "./families";
-import { readHead, readLogs, readModules, readRoots, type Rpc } from "./reads";
-import { isRangeTooWide } from "./rpc-pool";
-import { redactRpcUrls } from "./rpc-urls";
+import {
+  readHead,
+  readLogs,
+  readModules,
+  readRoots,
+  widestLogSpan,
+  type Rpc,
+} from "./reads";
 import type { Store } from "./store";
 import { ChainTrees } from "./trees";
 
@@ -203,7 +209,7 @@ export class Follower {
     const addresses = addressesOf(this.contracts);
     let start = from;
     while (start <= to && !this.stopping) {
-      const widest = this.rpc.widestLogSpan?.({ address: addresses });
+      const widest = widestLogSpan(this.rpc);
       const blocks = Math.min(
         this.chunk,
         widest === undefined ? Infinity : widest + 1,
