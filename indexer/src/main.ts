@@ -1,9 +1,13 @@
+import {
+  createRpcPool,
+  retiredRpcWarning,
+  type CreateRpcPoolOptions,
+  type RpcPool,
+} from "@bermuda/sdk";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { loadConfig } from "./config";
+import { loadConfig, type Config } from "./config";
 import { Follower } from "./follower";
-import { createRpcPool } from "./rpc-pool";
-import { retiredRpcWarning } from "./rpc-urls";
 import { createApp } from "./server";
 import { Store } from "./store";
 
@@ -22,6 +26,25 @@ export function withUserAgent(
   }) as typeof fetch;
 }
 
+/**
+ * The sdk's RPC pool every read goes through: the chain's free nodes, or the operator's
+ * `RPC_URLS` / `RPC_URLS_FILE` in their place, asked in order. No read cache: the follower never
+ * asks the same question twice except to retry a range that failed verification, and that retry
+ * must reach a node. In-flight reads are still shared.
+ */
+export function createRpc(
+  config: Pick<Config, "chainId" | "rpcUrls">,
+  opts: Pick<CreateRpcPoolOptions, "fetch" | "now" | "sleep"> = {},
+): RpcPool {
+  return createRpcPool({
+    ...opts,
+    chainId: config.chainId,
+    urls: config.rpcUrls,
+    cache: false,
+    fetch: withUserAgent(opts.fetch ?? fetch, USER_AGENT),
+  });
+}
+
 /** Start the indexer: open the database, follow the chain, serve HTTP. */
 export async function startIndexer(
   env: Record<string, string | undefined>,
@@ -37,14 +60,7 @@ export async function startIndexer(
     registry: config.registry,
     startBlock: config.startBlock,
   });
-  // No read cache: the follower never asks the same question twice except to retry a range
-  // that failed verification, and that retry must reach a node. In-flight reads are still shared.
-  const rpc = createRpcPool({
-    chainId: config.chainId,
-    urls: config.rpcUrls,
-    cache: false,
-    fetch: withUserAgent(fetch, USER_AGENT),
-  });
+  const rpc = createRpc(config);
   const follower = new Follower({
     store,
     rpc,

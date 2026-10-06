@@ -1,7 +1,5 @@
-import bermuda from "@bermuda/sdk";
+import bermuda, { readRpcUrls, rpcChainOf } from "@bermuda/sdk";
 import { readFileSync } from "node:fs";
-import { rpcChainOf } from "./rpc-nodes";
-import { readRpcUrls } from "./rpc-urls";
 
 /** The sdk presets by chain id. */
 const PRESETS: Readonly<Record<number, string>> = {

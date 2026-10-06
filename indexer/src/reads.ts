@@ -2,13 +2,25 @@ import { Interface } from "ethers";
 import { TOPICS, type RpcLog } from "./families";
 
 /**
- * The JSON-RPC surface the indexer needs: the pool's `request`, built without a read cache so a
- * retry after a mismatch asks the chain again. `widestLogSpan`, when offered, lets the follower
- * size its log windows so no node refuses them.
+ * The JSON-RPC surface the indexer needs: the sdk pool's `request`, built without a read cache so
+ * a retry after a mismatch asks the chain again. `describe`, when offered, tells what the pool has
+ * learned about its nodes, so the follower can size its log windows to ones a node takes.
  */
 export interface Rpc {
   request<T = unknown>(method: string, params?: unknown[]): Promise<T>;
-  widestLogSpan?(filter?: { address?: unknown }): number;
+  describe?(): ReadonlyArray<{ logs: string; maxLogSpan: number }>;
+}
+
+/**
+ * The widest addressed log window a node of the pool takes, as far as the pool knows: unbounded
+ * while a node that serves logs has named no limit. Undefined when the client describes no node
+ * that serves logs.
+ */
+export function widestLogSpan(rpc: Rpc): number | undefined {
+  const spans = (rpc.describe?.() ?? [])
+    .filter((node) => node.logs !== "none")
+    .map((node) => node.maxLogSpan);
+  return spans.length > 0 ? Math.max(...spans) : undefined;
 }
 
 const abi = new Interface([

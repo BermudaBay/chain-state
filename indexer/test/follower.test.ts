@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { RpcPool } from "@bermuda/sdk";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Follower } from "../src/follower";
-import { RpcPool } from "../src/rpc-pool";
 import { Store } from "../src/store";
 import {
   ADDRESSES,
@@ -210,6 +210,17 @@ describe("following the chain", () => {
       Math.max(...getLogs.filter((r) => r.ok).map(span)),
       getLogs.filter((r) => !r.ok).length,
     ]).toEqual([chain.head, 9, 1]);
+  });
+
+  test("should ask for a whole chunk while no node has named a limit", async () => {
+    const { chain, store, follower } = setup();
+    deploy(chain);
+    chain.mine(5_000);
+    await follower.tick();
+    expect([store.meta.confirmed, chain.count("eth_getLogs")]).toEqual([
+      chain.head,
+      1,
+    ]);
   });
 });
 
