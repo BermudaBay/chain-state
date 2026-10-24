@@ -1,8 +1,7 @@
 name: ci
 
+# The repo is no longer used: the hourly crawl is switched off; run it by hand if ever needed.
 on:
-  schedule:
-    - cron: 0 * * * *
   workflow_dispatch:
 
 permissions:
